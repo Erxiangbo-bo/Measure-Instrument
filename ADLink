@@ -1,0 +1,103 @@
+public static class InstrumentOperation
+    {
+        static int ibsta, iberr, ibcnt, ibcntl;
+        private static ushort[] result;
+        public static List<ushort> Addr = new List<ushort>();
+        public static string WriteCommand(int addr, string command)
+        {
+            //Declare variables
+            string strWrite;
+            StringBuilder strRead = new StringBuilder(100);
+            int dev;
+            //Open and intialize an GPIB instrument
+            dev = GPIB.ibdev(0, addr, 0, (int)GPIB.gpib_timeout.T30s, 1, 0);
+            ErrMessage("Error in initializing the GPIB instrument.");
+            //clear the specific GPIB instrument
+            GPIB.ibclr(dev);
+            ErrMessage("Error in clearing the GPIB device.");
+            strWrite = command;
+            //Write a string command to a GPIB instrument using the ibwrt() command
+            GPIB.ibwrt(dev, strWrite, strWrite.Length);
+            GPIB.gpib_get_globals(out ibsta, out iberr, out ibcnt, out ibcntl);
+            ErrMessage("Error in writing the string command to the GPIB instrument.");
+            if (strWrite.Contains("?"))
+            {
+                //Read the response string from the GPIB instrument using the ibrd() command
+                GPIB.ibrd(dev, strRead, 100);
+                ErrMessage("Error in reading the response string from the GPIB instrument.");
+                strRead.Length = ibcnt;
+                //Offline the GPIB interface card
+                GPIB.ibonl(dev, 0);
+                ErrMessage("Error in offline the GPIB interface card.");
+                return strRead.ToString();
+            }
+            return "";
+        }
+
+        public static List<string> FindInstrument(List<string> InstrumentInfo)
+        {
+            //Declare variables
+            result = new ushort[30];
+            ushort[] instruments = new ushort[31];
+            int num_listeners;
+            ushort k; 
+            //Reset the GPIB interface card by sending an interface clear command (SendIFC)
+            GPIB.SendIFC(0);
+            ErrMessage("Error in executing the SendIFC() command.");
+
+            for (k = 0; k < 30; k++)
+            {
+                instruments[k] = (ushort)(k + 1);
+            }
+            instruments[30] = GPIB.NOADDR;
+
+            //Find the listeners (instruments) on the GPIB bus using the FindLstn() command
+            GPIB.FindLstn(0, instruments, result, 31);
+            ErrMessage("Error in executing the FindLstn() command.");
+            if (result[0] == 0) return null;
+            foreach (var each in result)
+            {
+                if (each != 0) Addr.Add(each);
+            }
+            num_listeners = ibcnt;
+
+            for (int find = 0; find < result.Length; find++)
+            {
+                if (result[find] == 0) continue;
+                int dev;
+                //Open and intialize an GPIB instrument
+                dev = GPIB.ibdev(0, result[find], 0, (int)GPIB.gpib_timeout.T10s, 1, 0);
+                ErrMessage("Error in initializing the GPIB instrument.");
+                GPIB.ibclr(dev);
+                ErrMessage("Error in clearing the GPIB device.");
+                string strWrite = "*IDN?";
+                //write a "*IDN?" string to the GPIB instrument
+                GPIB.ibwrt(dev, strWrite, 5);
+                ErrMessage("Error in writing *IDN? string to the instrument.");
+                StringBuilder strRead = new StringBuilder(100);
+                //Read the returned identification string from the instrument
+                GPIB.ibrd(dev, strRead, 100);
+                ErrMessage("Error in reading identification string from the instrument.");
+                strRead.Length = ibcnt;
+                InstrumentInfo.Add($"设备地址:{result[find]};设备信息:{strRead.ToString()}");
+            }
+            //List the addresses of listeners stored in the result[] array.
+            
+            //Offline the GPIB interface card
+            GPIB.ibonl(0, 0);
+            if ((ibsta & (int)GPIB.ibsta_bits.ERR) != 0)
+            {
+                MessageBox.Show("Error in offline the GPIB interface card.");
+            }
+            return InstrumentInfo;
+        }
+
+        public static void ErrMessage(string message)
+        {
+            GPIB.gpib_get_globals(out ibsta, out iberr, out ibcnt, out ibcntl);
+            if ((ibsta & (int)GPIB.ibsta_bits.ERR) != 0)
+            {
+                MessageBox.Show(message);
+            }
+        }
+    }
