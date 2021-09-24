@@ -1,0 +1,70 @@
+public static class VISA32Operation
+    {
+        public static List<string> Addr = new List<string>();
+        public static List<string> FindInstrument()
+        {
+            int vi = 0;
+            int session = 0;
+            int retcount = 0;
+            var addrs = new List<string>();
+            var instrumentinfo = new List<string>();
+            var str = new StringBuilder(100);
+            try
+            {
+                VISA32.viOpenDefaultRM(out session);
+                VISA32.viFindRsrc(session, "GPIB0?*INSTR", out vi, out retcount, str);
+            }
+            catch
+            {
+                MessageBox.Show("请检查设备连接是否正常！");
+                return null;
+            }
+            if (str.Length == 0) return null;
+            addrs.Add(str.ToString());
+            while (true)
+            {
+                VISA32.viFindNext(vi, str);
+                if (str.Length != 0)
+                {
+                    addrs.Add(str.ToString());
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            foreach (var each in addrs)
+            {
+                var addr = each.ToString().Split(':');
+                Addr.Add(addr[2]);
+                byte[] send = Encoding.ASCII.GetBytes("*IDN?");
+                VISA32.viOpen(session, $"GPIB::{addr[2]}::0::INSTR", 0, 0, out vi);
+                VISA32.viWrite(vi, send, send.Length, out retcount);
+                var received = new byte[1024];
+                VISA32.viRead(vi, received, received.Length, out retcount);
+                instrumentinfo.Add($"设备地址：{addr[2]};设备信息：{Encoding.ASCII.GetString(received)}");
+            }
+            return instrumentinfo;
+        }
+
+        public static string WriteCommand(string vi_Addr, string command)
+        {
+            var send = Encoding.ASCII.GetBytes(command);
+            int retcount = 0;
+            int vi = 0;
+            int session = 0;
+            VISA32.viOpenDefaultRM(out session);
+            VISA32.viOpen(session, $"GPIB::{vi_Addr}::INSTR", 0, 0, out vi);
+            VISA32.viWrite(vi, send, send.Length, out retcount);
+            if (command.Contains("?"))
+            {
+                var received = new byte[1024];
+                VISA32.viRead(vi, received, received.Length, out retcount);
+                VISA32.viClear(vi);
+                VISA32.viClose(vi);
+                return Encoding.ASCII.GetString(received, 0, retcount);
+            }
+            return "";
+        }
+    }
